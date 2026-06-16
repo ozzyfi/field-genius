@@ -44,31 +44,41 @@ export function BottomNav() {
     { to: "/gecmis", label: "Geçmiş", icon: History },
   ] as const;
   return (
-    <nav className="bottom-nav">
-      <div className="mx-auto max-w-md grid grid-cols-3 items-center gap-1 relative">
-        {items.map((it, idx) => {
-          const active = pathname === it.to || pathname.startsWith(it.to + "/");
-          const Icon = it.icon;
-          return (
-            <Link
-              key={it.to}
-              to={it.to}
-              className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-2xl tap ${active ? "text-foreground" : "text-muted-foreground"}`}
-              style={idx === 1 ? { paddingTop: 24 } : undefined}
-            >
-              {idx === 1 ? null : <Icon className="h-5 w-5" />}
-              {idx === 1 ? <span className="h-5" /> : null}
-              <span className="text-[11px] font-semibold">{it.label}</span>
-              {active && <span className="absolute top-0 -translate-y-1 h-1 w-8 rounded-full bg-primary" style={{ left: `calc(${idx} * 33.333% + 16.6% - 16px)` }} />}
-            </Link>
-          );
-        })}
+    <nav
+      className="fixed left-0 right-0 z-40 px-5"
+      style={{ bottom: `calc(1rem + env(safe-area-inset-bottom))` }}
+    >
+      <div className="mx-auto max-w-md relative">
+        <div
+          className="relative flex items-center gap-1 rounded-full p-1.5 bg-ink text-ink-foreground"
+          style={{ boxShadow: "0 18px 40px -12px rgba(10, 12, 30, 0.45), 0 4px 14px -6px rgba(10, 12, 30, 0.35)" }}
+        >
+          {items.map((it) => {
+            const active = pathname === it.to || pathname.startsWith(it.to + "/");
+            const Icon = it.icon;
+            return (
+              <Link
+                key={it.to}
+                to={it.to}
+                className={`flex-1 flex items-center justify-center gap-1.5 h-11 rounded-full tap transition-colors ${
+                  active
+                    ? "bg-primary text-primary-foreground font-semibold"
+                    : "text-ink-foreground/60 hover:text-ink-foreground"
+                }`}
+              >
+                <Icon className={`h-[18px] w-[18px] ${active ? "stroke-[2.2]" : "stroke-[1.6]"}`} />
+                <span className="text-[12px] leading-none">{it.label}</span>
+              </Link>
+            );
+          })}
+        </div>
         <button
           onClick={() => navigate({ to: "/yeni" })}
-          className="absolute left-1/2 -translate-x-1/2 -top-6 h-14 w-14 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-lg shadow-primary/30 ring-4 ring-background tap"
+          className="absolute -top-4 -right-2 h-12 w-12 rounded-full bg-primary text-primary-foreground grid place-items-center tap"
+          style={{ boxShadow: "0 10px 24px -8px color-mix(in oklch, var(--color-primary) 65%, transparent), 0 4px 10px -4px rgba(10,12,30,0.3)" }}
           aria-label="Yeni Kayıt"
         >
-          <Plus className="h-7 w-7" />
+          <Plus className="h-6 w-6" strokeWidth={2.4} />
         </button>
       </div>
     </nav>
