@@ -16,6 +16,7 @@ import { Route as AppYeniRouteImport } from './routes/_app.yeni'
 import { Route as AppIslerimRouteImport } from './routes/_app.islerim'
 import { Route as AppGecmisRouteImport } from './routes/_app.gecmis'
 import { Route as AppAiRouteImport } from './routes/_app.ai'
+import { Route as AppIsIdRouteImport } from './routes/_app.is.$id'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -51,6 +52,11 @@ const AppAiRoute = AppAiRouteImport.update({
   path: '/ai',
   getParentRoute: () => AppRoute,
 } as any)
+const AppIsIdRoute = AppIsIdRouteImport.update({
+  id: '/is/$id',
+  path: '/is/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/gecmis': typeof AppGecmisRoute
   '/islerim': typeof AppIslerimRoute
   '/yeni': typeof AppYeniRoute
+  '/is/$id': typeof AppIsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/gecmis': typeof AppGecmisRoute
   '/islerim': typeof AppIslerimRoute
   '/yeni': typeof AppYeniRoute
+  '/is/$id': typeof AppIsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,12 +85,20 @@ export interface FileRoutesById {
   '/_app/gecmis': typeof AppGecmisRoute
   '/_app/islerim': typeof AppIslerimRoute
   '/_app/yeni': typeof AppYeniRoute
+  '/_app/is/$id': typeof AppIsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/ai' | '/gecmis' | '/islerim' | '/yeni'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/ai'
+    | '/gecmis'
+    | '/islerim'
+    | '/yeni'
+    | '/is/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/ai' | '/gecmis' | '/islerim' | '/yeni'
+  to: '/' | '/auth' | '/ai' | '/gecmis' | '/islerim' | '/yeni' | '/is/$id'
   id:
     | '__root__'
     | '/'
@@ -92,6 +108,7 @@ export interface FileRouteTypes {
     | '/_app/gecmis'
     | '/_app/islerim'
     | '/_app/yeni'
+    | '/_app/is/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -151,6 +168,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAiRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/is/$id': {
+      id: '/_app/is/$id'
+      path: '/is/$id'
+      fullPath: '/is/$id'
+      preLoaderRoute: typeof AppIsIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -159,6 +183,7 @@ interface AppRouteChildren {
   AppGecmisRoute: typeof AppGecmisRoute
   AppIslerimRoute: typeof AppIslerimRoute
   AppYeniRoute: typeof AppYeniRoute
+  AppIsIdRoute: typeof AppIsIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -166,6 +191,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppGecmisRoute: AppGecmisRoute,
   AppIslerimRoute: AppIslerimRoute,
   AppYeniRoute: AppYeniRoute,
+  AppIsIdRoute: AppIsIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
