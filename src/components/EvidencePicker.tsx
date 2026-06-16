@@ -28,7 +28,7 @@ export function EvidencePicker({ onAdd, onClose }: { onAdd: (e: DraftEvidence) =
 
   function commit() {
     if (!kind) return;
-    let label = KINDS.find((k) => k.k === kind)!.label;
+    let label: string = KINDS.find((k) => k.k === kind)!.label;
     let val = value;
     if (kind === "olcum") {
       label = `${meas.value} ${meas.unit}`;
