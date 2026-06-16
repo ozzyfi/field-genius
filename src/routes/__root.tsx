@@ -9,6 +9,7 @@ import { type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { AuthProvider } from "@/lib/auth";
+import { MockProvider } from "@/lib/mock";
 import { Toaster } from "sonner";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -49,8 +50,10 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Outlet />
-        <Toaster position="top-center" richColors closeButton />
+        <MockProvider>
+          <Outlet />
+          <Toaster position="top-center" richColors closeButton />
+        </MockProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
