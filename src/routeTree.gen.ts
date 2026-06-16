@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppYeniRouteImport } from './routes/_app.yeni'
 import { Route as AppIslerimRouteImport } from './routes/_app.islerim'
 import { Route as AppGecmisRouteImport } from './routes/_app.gecmis'
+import { Route as AppBildirimlerRouteImport } from './routes/_app.bildirimler'
 import { Route as AppAiRouteImport } from './routes/_app.ai'
 import { Route as AppIsIdRouteImport } from './routes/_app.is.$id'
 
@@ -47,6 +48,11 @@ const AppGecmisRoute = AppGecmisRouteImport.update({
   path: '/gecmis',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBildirimlerRoute = AppBildirimlerRouteImport.update({
+  id: '/bildirimler',
+  path: '/bildirimler',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAiRoute = AppAiRouteImport.update({
   id: '/ai',
   path: '/ai',
@@ -62,6 +68,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/ai': typeof AppAiRoute
+  '/bildirimler': typeof AppBildirimlerRoute
   '/gecmis': typeof AppGecmisRoute
   '/islerim': typeof AppIslerimRoute
   '/yeni': typeof AppYeniRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/ai': typeof AppAiRoute
+  '/bildirimler': typeof AppBildirimlerRoute
   '/gecmis': typeof AppGecmisRoute
   '/islerim': typeof AppIslerimRoute
   '/yeni': typeof AppYeniRoute
@@ -82,6 +90,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/_app/ai': typeof AppAiRoute
+  '/_app/bildirimler': typeof AppBildirimlerRoute
   '/_app/gecmis': typeof AppGecmisRoute
   '/_app/islerim': typeof AppIslerimRoute
   '/_app/yeni': typeof AppYeniRoute
@@ -93,18 +102,28 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/ai'
+    | '/bildirimler'
     | '/gecmis'
     | '/islerim'
     | '/yeni'
     | '/is/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/ai' | '/gecmis' | '/islerim' | '/yeni' | '/is/$id'
+  to:
+    | '/'
+    | '/auth'
+    | '/ai'
+    | '/bildirimler'
+    | '/gecmis'
+    | '/islerim'
+    | '/yeni'
+    | '/is/$id'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/auth'
     | '/_app/ai'
+    | '/_app/bildirimler'
     | '/_app/gecmis'
     | '/_app/islerim'
     | '/_app/yeni'
@@ -161,6 +180,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGecmisRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/bildirimler': {
+      id: '/_app/bildirimler'
+      path: '/bildirimler'
+      fullPath: '/bildirimler'
+      preLoaderRoute: typeof AppBildirimlerRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/ai': {
       id: '/_app/ai'
       path: '/ai'
@@ -180,6 +206,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAiRoute: typeof AppAiRoute
+  AppBildirimlerRoute: typeof AppBildirimlerRoute
   AppGecmisRoute: typeof AppGecmisRoute
   AppIslerimRoute: typeof AppIslerimRoute
   AppYeniRoute: typeof AppYeniRoute
@@ -188,6 +215,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAiRoute: AppAiRoute,
+  AppBildirimlerRoute: AppBildirimlerRoute,
   AppGecmisRoute: AppGecmisRoute,
   AppIslerimRoute: AppIslerimRoute,
   AppYeniRoute: AppYeniRoute,
