@@ -9,38 +9,113 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppYeniRouteImport } from './routes/_app.yeni'
+import { Route as AppIslerimRouteImport } from './routes/_app.islerim'
+import { Route as AppGecmisRouteImport } from './routes/_app.gecmis'
+import { Route as AppAiRouteImport } from './routes/_app.ai'
 
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppYeniRoute = AppYeniRouteImport.update({
+  id: '/yeni',
+  path: '/yeni',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppIslerimRoute = AppIslerimRouteImport.update({
+  id: '/islerim',
+  path: '/islerim',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGecmisRoute = AppGecmisRouteImport.update({
+  id: '/gecmis',
+  path: '/gecmis',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAiRoute = AppAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/ai': typeof AppAiRoute
+  '/gecmis': typeof AppGecmisRoute
+  '/islerim': typeof AppIslerimRoute
+  '/yeni': typeof AppYeniRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/ai': typeof AppAiRoute
+  '/gecmis': typeof AppGecmisRoute
+  '/islerim': typeof AppIslerimRoute
+  '/yeni': typeof AppYeniRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_app/ai': typeof AppAiRoute
+  '/_app/gecmis': typeof AppGecmisRoute
+  '/_app/islerim': typeof AppIslerimRoute
+  '/_app/yeni': typeof AppYeniRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/auth' | '/ai' | '/gecmis' | '/islerim' | '/yeni'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/auth' | '/ai' | '/gecmis' | '/islerim' | '/yeni'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/auth'
+    | '/_app/ai'
+    | '/_app/gecmis'
+    | '/_app/islerim'
+    | '/_app/yeni'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +123,57 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/yeni': {
+      id: '/_app/yeni'
+      path: '/yeni'
+      fullPath: '/yeni'
+      preLoaderRoute: typeof AppYeniRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/islerim': {
+      id: '/_app/islerim'
+      path: '/islerim'
+      fullPath: '/islerim'
+      preLoaderRoute: typeof AppIslerimRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/gecmis': {
+      id: '/_app/gecmis'
+      path: '/gecmis'
+      fullPath: '/gecmis'
+      preLoaderRoute: typeof AppGecmisRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ai': {
+      id: '/_app/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof AppAiRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppRouteChildren {
+  AppAiRoute: typeof AppAiRoute
+  AppGecmisRoute: typeof AppGecmisRoute
+  AppIslerimRoute: typeof AppIslerimRoute
+  AppYeniRoute: typeof AppYeniRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppAiRoute: AppAiRoute,
+  AppGecmisRoute: AppGecmisRoute,
+  AppIslerimRoute: AppIslerimRoute,
+  AppYeniRoute: AppYeniRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
