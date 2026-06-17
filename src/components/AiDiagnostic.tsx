@@ -1,27 +1,65 @@
 import { useState } from "react";
+import { useMock, type DraftEvidence } from "@/lib/mock";
 import { MOCK_DIAGNOSTIC_STEPS, MOCK_SIMILAR_CASES } from "@/lib/mockData";
 import { Sparkles, FileText, AlertTriangle, CheckCircle2, HelpCircle, Camera, Gauge, ExternalLink, ArrowRight } from "lucide-react";
 import { BottomSheet } from "./FocusSheet";
+import { EvidencePicker } from "./EvidencePicker";
 
-export function AiDiagnostic({ onBack, onProceed }: { onBack: () => void; onProceed: () => void }) {
-  const [idx, setIdx] = useState(0);
-  const [results, setResults] = useState<Record<string, "normal" | "sorun" | "emin_degil">>({});
+export function AiDiagnostic({ workId, symptom, onBack, onProceed }: {
+  workId: string; symptom?: string; onBack: () => void; onProceed: () => void;
+}) {
+  const { getDraft, updateDraft } = useMock();
+  const draft = getDraft(workId);
+  const checks = draft?.diagnosticChecks ?? [];
+  const [idx, setIdx] = useState(checks.length);
   const [source, setSource] = useState<null | { doc: string; section: string }>(null);
-  const step = MOCK_DIAGNOSTIC_STEPS[idx];
-  const done = idx >= MOCK_DIAGNOSTIC_STEPS.length;
-  const resolved = Object.values(results).some((r) => r === "normal" || r === "sorun") && done;
+  const [picker, setPicker] = useState<null | { side: "once" | "sirasinda" | "sonra"; kindHint?: "olcum" | "foto" }>(null);
+  const total = MOCK_DIAGNOSTIC_STEPS.length;
+  const step = idx < total ? MOCK_DIAGNOSTIC_STEPS[idx] : null;
+  const done = idx >= total || checks.some((c) => c.result === "sorun");
+
+  function recordResult(result: "normal" | "sorun" | "emin_degil") {
+    const newCheck = { id: step!.id, title: step!.title, result, at: new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) };
+    const next = [...checks, newCheck];
+    updateDraft(workId, { diagnosticChecks: next });
+    if (result === "sorun") {
+      updateDraft(workId, { identifiedCause: step!.title });
+      setIdx(total);
+    } else {
+      setIdx(idx + 1);
+    }
+  }
+
+  function addEv(e: DraftEvidence) {
+    updateDraft(workId, { evidence: [...(draft?.evidence ?? []), { ...e, stepId: `ai-${step?.id}` }] });
+  }
 
   return (
     <div className="space-y-3">
       <div className="card-soft p-4 bg-ink text-ink-foreground border-transparent" style={{ background: "var(--color-ink)", color: "var(--color-ink-foreground)" }}>
         <div className="flex items-center gap-2 mb-1"><Sparkles className="h-4 w-4 text-primary" /><div className="text-[11px] uppercase tracking-widest opacity-70">Mevcut belirti</div></div>
-        <div className="font-semibold">Yüksek titreşim ve ses — Konveyör Bandı 7</div>
-        <div className="text-[12px] opacity-80 mt-1">Üretim devam ediyor. Operatör fire artışı bildirdi.</div>
+        <div className="font-semibold">{symptom ?? "Yüksek titreşim ve ses — Konveyör Bandı 7"}</div>
+        <div className="text-[12px] opacity-80 mt-1">Operatör fire artışı bildirdi. Adım adım kontrolle ilerleyeceğiz.</div>
       </div>
 
-      {!done ? (
+      {checks.length > 0 && !done && (
+        <div className="card-soft p-3">
+          <div className="label mb-1">Tamamlanan kontroller</div>
+          <ul className="text-sm space-y-1">
+            {checks.map((c) => (
+              <li key={c.id} className="flex items-center gap-2">
+                {c.result === "normal" ? <CheckCircle2 className="h-4 w-4 text-success" /> : c.result === "sorun" ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <HelpCircle className="h-4 w-4 text-muted-foreground" />}
+                <span className="flex-1">{c.title}</span>
+                <span className="text-[11px] text-muted-foreground">{c.at}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {step && !done ? (
         <div className="card-soft p-4">
-          <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Önerilen kontrol {idx + 1}/{MOCK_DIAGNOSTIC_STEPS.length}</div>
+          <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Önerilen kontrol {idx + 1}/{total}</div>
           <div className="font-bold text-lg leading-snug">{step.title}</div>
           <p className="text-sm text-muted-foreground mt-1">{step.reason}</p>
 
@@ -43,24 +81,31 @@ export function AiDiagnostic({ onBack, onProceed }: { onBack: () => void; onProc
           </div>
 
           <div className="grid grid-cols-2 gap-2 mt-4">
-            <button className="btn btn-ghost"><Camera className="h-4 w-4" /> Kanıt ekle</button>
-            <button className="btn btn-ghost"><Gauge className="h-4 w-4" /> Ölçüm gir</button>
+            <button className="btn btn-ghost" onClick={() => setPicker({ side: "sirasinda", kindHint: "foto" })}><Camera className="h-4 w-4" /> Kanıt ekle</button>
+            <button className="btn btn-ghost" onClick={() => setPicker({ side: "sirasinda", kindHint: "olcum" })}><Gauge className="h-4 w-4" /> Ölçüm gir</button>
           </div>
           <div className="text-[12px] text-muted-foreground mt-3 mb-1">Kontrolü yaptıktan sonra:</div>
           <div className="grid grid-cols-3 gap-2">
-            <button onClick={() => { setResults({ ...results, [step.id]: "normal" }); setIdx(idx + 1); }} className="btn btn-ghost text-success"><CheckCircle2 className="h-4 w-4" /> Normal</button>
-            <button onClick={() => { setResults({ ...results, [step.id]: "sorun" }); setIdx(MOCK_DIAGNOSTIC_STEPS.length); }} className="btn btn-ghost text-destructive"><AlertTriangle className="h-4 w-4" /> Sorun</button>
-            <button onClick={() => { setResults({ ...results, [step.id]: "emin_degil" }); setIdx(idx + 1); }} className="btn btn-ghost"><HelpCircle className="h-4 w-4" /> Emin değilim</button>
+            <button onClick={() => recordResult("normal")} className="btn btn-ghost text-success"><CheckCircle2 className="h-4 w-4" /> Normal</button>
+            <button onClick={() => recordResult("sorun")} className="btn btn-ghost text-destructive"><AlertTriangle className="h-4 w-4" /> Sorun</button>
+            <button onClick={() => recordResult("emin_degil")} className="btn btn-ghost"><HelpCircle className="h-4 w-4" /> Emin değilim</button>
           </div>
         </div>
       ) : (
         <div className="card-soft p-4">
-          <div className="font-semibold mb-1">Teşhis adımları tamamlandı</div>
+          <div className="font-semibold mb-2">Teşhis tamamlandı</div>
+          {draft?.identifiedCause && (
+            <div className="rounded-2xl border border-border p-3 mb-3">
+              <div className="label mb-1">Tespit edilen kök neden</div>
+              <div className="font-semibold">{draft.identifiedCause}</div>
+              <div className="text-[12px] text-muted-foreground mt-0.5">ToolA önerisi: müdahaleye geç ve kapanışı doldur.</div>
+            </div>
+          )}
           <ul className="text-sm space-y-1 mb-3">
-            {MOCK_DIAGNOSTIC_STEPS.map((s) => (
-              <li key={s.id} className="flex items-center gap-2">
-                {results[s.id] === "normal" ? <CheckCircle2 className="h-4 w-4 text-success" /> : results[s.id] === "sorun" ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <HelpCircle className="h-4 w-4 text-muted-foreground" />}
-                <span>{s.title}</span>
+            {checks.map((c) => (
+              <li key={c.id} className="flex items-center gap-2">
+                {c.result === "normal" ? <CheckCircle2 className="h-4 w-4 text-success" /> : c.result === "sorun" ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <HelpCircle className="h-4 w-4 text-muted-foreground" />}
+                <span>{c.title}</span>
               </li>
             ))}
           </ul>
@@ -81,6 +126,8 @@ export function AiDiagnostic({ onBack, onProceed }: { onBack: () => void; onProc
           <button className="btn btn-ghost w-full mt-3"><ExternalLink className="h-4 w-4" /> Kaynağı tam ekran aç</button>
         </BottomSheet>
       )}
+
+      {picker && <EvidencePicker onAdd={(e) => addEv({ ...e, side: picker.side })} onClose={() => setPicker(null)} />}
     </div>
   );
 }
