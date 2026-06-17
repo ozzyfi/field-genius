@@ -313,9 +313,19 @@ export function QrScannerSheet({ onClose, onMachine }: { onClose: () => void; on
 
 /* ---------------- QR result machine card ---------------- */
 
-export function QrMachineResult({ m, onClose, onCreate, onHistory }: {
-  m: typeof MOCK_MACHINES[number]; onClose: () => void; onCreate: () => void; onHistory: () => void;
+export function QrMachineResult({ m, onClose, onPick, onHistory }: {
+  m: typeof MOCK_MACHINES[number];
+  onClose: () => void;
+  onPick: (workType: "ariza" | "bakim" | "test" | "kurulum" | "parca" | "diger") => void;
+  onHistory: () => void;
 }) {
+  const options = [
+    { k: "ariza", label: "Arıza bildir" },
+    { k: "bakim", label: "Bakım başlat" },
+    { k: "test", label: "Test / kontrol" },
+    { k: "parca", label: "Parça değişimi" },
+    { k: "diger", label: "Gözlem kaydı" },
+  ] as const;
   return (
     <FocusSheet title="Makine bulundu" onClose={onClose}>
       <div className="card-soft p-4 mb-3">
@@ -330,10 +340,13 @@ export function QrMachineResult({ m, onClose, onCreate, onHistory }: {
           <KV label="Tekrarlayan" value="Yüksek titreşim" />
         </div>
       </div>
-      <div className="space-y-2">
-        <button onClick={onCreate} className="btn btn-primary w-full">Bu makine için kayıt oluştur</button>
-        <button onClick={onHistory} className="btn btn-ghost w-full">Makine geçmişini aç</button>
+      <div className="label mb-2">Bu makine için ne yapmak istiyorsun?</div>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {options.map((o) => (
+          <button key={o.k} onClick={() => onPick(o.k)} className="card-soft p-3 text-left tap font-semibold text-sm">{o.label}</button>
+        ))}
       </div>
+      <button onClick={onHistory} className="btn btn-ghost w-full">Makine geçmişini aç</button>
     </FocusSheet>
   );
 }
