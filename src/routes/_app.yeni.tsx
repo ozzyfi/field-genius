@@ -131,7 +131,17 @@ function YeniPage() {
           <QrMachineResult
             m={qrMachine}
             onClose={() => setFlow(null)}
-            onCreate={() => create({ type: "ariza", title: `${qrMachine.name} — yeni kayıt`, description: `Makine: ${qrMachine.name} (${qrMachine.code})`, location: qrMachine.location })}
+            onPick={(wt) => {
+              const titleByType: Record<string, string> = {
+                ariza: `${qrMachine.name} — arıza`,
+                bakim: `${qrMachine.name} — bakım`,
+                test: `${qrMachine.name} — test/kontrol`,
+                kurulum: `${qrMachine.name} — kurulum`,
+                parca: `${qrMachine.name} — parça değişimi`,
+                diger: `${qrMachine.name} — gözlem`,
+              };
+              create({ type: wt, title: titleByType[wt], description: `Makine: ${qrMachine.name} (${qrMachine.code})`, location: qrMachine.location });
+            }}
             onHistory={() => { setFlow(null); toast("Makine geçmişi — Geçmiş sekmesinden filtrele"); navigate({ to: "/gecmis" }); }}
           />
         )}
