@@ -11,8 +11,8 @@ const STEPS = WORKFLOWS.parca.steps;
 const REASONS = ["Arıza", "Periyodik değişim", "Önleyici bakım", "Hasar", "Güncelleme"];
 const DISPOSITIONS = ["Hurda", "Garanti", "Tamir", "Depoya iade", "Diğer"];
 
-export function PartReplacementFlow({ workId, onReview, workTitle, workCode }: {
-  workId: string; onReview: () => void; workTitle: string; workCode: string;
+export function PartReplacementFlow({ workId, onReview, workTitle, workCode, onSupport }: {
+  workId: string; onReview: () => void; workTitle: string; workCode: string; onSupport?: () => void;
 }) {
   const { getDraft, updateDraft, setStep, addLinkedRecord } = useMock();
   const draft = getDraft(workId)!;

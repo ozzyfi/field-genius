@@ -5,8 +5,8 @@ import { Sparkles, FileText, AlertTriangle, CheckCircle2, HelpCircle, Camera, Ga
 import { BottomSheet } from "./FocusSheet";
 import { EvidencePicker } from "./EvidencePicker";
 
-export function AiDiagnostic({ workId, symptom, onBack, onProceed }: {
-  workId: string; symptom?: string; onBack: () => void; onProceed: () => void;
+export function AiDiagnostic({ workId, symptom, onBack, onProceed, onSupport }: {
+  workId: string; symptom?: string; onBack: () => void; onProceed: () => void; onSupport?: () => void;
 }) {
   const { getDraft, updateDraft } = useMock();
   const draft = getDraft(workId);
@@ -109,7 +109,10 @@ export function AiDiagnostic({ workId, symptom, onBack, onProceed }: {
               </li>
             ))}
           </ul>
-          <button onClick={onProceed} className="btn btn-primary w-full">Müdahale ve kapanışa geç <ArrowRight className="h-4 w-4" /></button>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={onProceed} className="btn btn-primary col-span-2">Müdahale ve kapanışa geç <ArrowRight className="h-4 w-4" /></button>
+            {onSupport && <button onClick={onSupport} className="btn btn-ghost col-span-2">Uzman desteği iste</button>}
+          </div>
         </div>
       )}
 
