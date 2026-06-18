@@ -54,8 +54,15 @@ export function CompletedView({ w, type, technician, assignedBy, draftOverride }
 
       <div className="card-soft p-4">
         <div className="label mb-2">Kanıt galerisi</div>
-        {evidence.length === 0 ? <div className="text-sm text-muted-foreground">Bu kayıt için kanıt eklenmemiş.</div> : <EvidenceGrid items={evidence} />}
+        {evidence.length === 0 ? <div className="text-sm text-muted-foreground">Bu kayıt için kanıt eklenmemiş.</div> : <EvidenceGrid items={evidence} onPreview={setPreview} />}
       </div>
+
+      <button className="btn btn-ghost w-full text-muted-foreground" onClick={() => toast("Düzeltme / revizyon talebi oluşturuldu (demo)")}>
+        <Pencil className="h-4 w-4" /> Düzeltme / revizyon talebi oluştur
+      </button>
+
+      {preview && <EvidencePreview e={preview} onClose={() => setPreview(null)} />}
+
 
       <LinkedRecordsList workId={w.id} />
 
