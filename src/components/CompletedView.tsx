@@ -1,9 +1,11 @@
-import { useMock, type DraftEvidence } from "@/lib/mock";
+import { useState } from "react";
+import { useMock, type DraftEvidence, type WorkDraft } from "@/lib/mock";
 import { type WorkType } from "@/lib/workflows";
-import { EvidenceGrid } from "./EvidencePicker";
+import { EvidenceGrid, EvidencePreview } from "./EvidencePicker";
 import { LinkedRecordsList } from "./LinkedRecordsList";
-import { CheckCircle2, Mic, Clock, User } from "lucide-react";
+import { CheckCircle2, Mic, Clock, User, Pencil } from "lucide-react";
 import { formatDateTr } from "@/lib/toola";
+import { toast } from "sonner";
 
 type Work = {
   id: string; code: string; type: string; title: string;
@@ -13,15 +15,17 @@ type Work = {
   follow_up_needed: boolean; follow_up_reason: string | null;
 };
 
-export function CompletedView({ w, type, technician, assignedBy }: {
+export function CompletedView({ w, type, technician, assignedBy, draftOverride }: {
   w: Work; type: WorkType;
   technician?: string; assignedBy?: string;
+  draftOverride?: WorkDraft;
 }) {
   const { getDraft } = useMock();
-  const draft = getDraft(w.id);
+  const draft = draftOverride ?? getDraft(w.id);
   const tpl = (draft?.template ?? {}) as Record<string, any>;
   const evidence: DraftEvidence[] = draft?.evidence ?? [];
   const waitedFor = draft?.support?.waitingSince;
+  const [preview, setPreview] = useState<DraftEvidence | null>(null);
 
   return (
     <div className="space-y-3">
