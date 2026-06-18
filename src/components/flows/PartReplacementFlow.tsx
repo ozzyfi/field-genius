@@ -102,14 +102,14 @@ export function PartReplacementFlow({ workId, onReview, workTitle, workCode, onS
                 <div className="flex items-center gap-2 font-semibold text-destructive"><AlertTriangle className="h-4 w-4" /> Fonksiyon testi geçmedi</div>
                 <div className="text-[13px]">İş tamamlanamaz. Aşağıdaki adımlardan birini seç:</div>
                 <div className="grid grid-cols-2 gap-2">
-                  <button className="btn btn-ghost" onClick={() => { updateDraft(workId, { blocked: false }); setTpl({ revert: true }); toast("Kurulum geri alındı"); }}>Kurulumu geri al</button>
-                  <button className="btn btn-ghost" onClick={() => toast("Uzman desteği talebi taslağı oluşturuldu")}>Uzman desteği iste</button>
-                  <button className="btn btn-ghost" onClick={() => toast("Başka parça talebi oluşturuldu")}>Başka parça iste</button>
+                  <button className="btn btn-ghost" onClick={() => { setTpl({ revert: true, funcTest: undefined }); toast("Kurulum geri alındı"); }}>Eski parçaya geri dön</button>
+                  <button className="btn btn-ghost" onClick={() => onSupport?.()}>Uzman desteği iste</button>
+                  <button className="btn btn-ghost" onClick={() => onSupport?.()}>Başka parça iste</button>
                   <button className="btn btn-ghost" onClick={() => {
                     const r = addLinkedRecord({ fromWorkId: workId, toCode: `ARZ-${Math.floor(Math.random() * 9000) + 1000}`, toType: "ariza", toTitle: "Parça değişimi sonrası arıza", relation: "bagli_ariza" });
                     toast.success(`${r.toCode} oluşturuldu`);
                   }}>Bağlantılı arıza</button>
-                  <button className="btn btn-danger col-span-2" onClick={() => { updateDraft(workId, { blocked: true }); toast("İş bloklandı"); }}>İşi bloklu tut</button>
+                  <button className="btn btn-danger col-span-2" onClick={() => { updateDraft(workId, { blocked: true, blockReason: "Fonksiyon testi geçmedi", workflowStatus: "blokeli" }); toast("İş bloklandı"); }}>İşi bloklu tut</button>
                 </div>
               </div>
             )}

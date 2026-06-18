@@ -18,8 +18,8 @@ function verdictFor(value: string, low: string, high: string): MeasurementRow["v
   return "gecti";
 }
 
-export function TestFlow({ workId, onReview, workTitle, workCode }: {
-  workId: string; onReview: () => void; workTitle: string; workCode: string;
+export function TestFlow({ workId, onReview, workTitle, workCode, onSupport }: {
+  workId: string; onReview: () => void; workTitle: string; workCode: string; onSupport?: () => void;
 }) {
   const { getDraft, updateDraft, setStep, addLinkedRecord } = useMock();
   const draft = getDraft(workId)!;
@@ -146,8 +146,8 @@ export function TestFlow({ workId, onReview, workTitle, workCode }: {
                     setTpl({ retestDecision: "planlandı" });
                     toast.success(`${rec.toCode} planlandı`);
                   }}>Tekrar test planla</button>
-                  <button className="btn btn-ghost" onClick={() => toast("Uzman desteği talebi taslağı oluşturuldu")}>Uzman desteği iste</button>
-                  <button className="btn btn-ghost" onClick={() => { updateDraft(workId, { blocked: true }); toast("İş beklemeye alındı"); }}>İşi beklemeye al</button>
+                  <button className="btn btn-ghost" onClick={() => onSupport?.()}>Uzman desteği iste</button>
+                  <button className="btn btn-ghost" onClick={() => { updateDraft(workId, { blocked: true, blockReason: "Test başarısız", workflowStatus: "blokeli" }); toast("İş beklemeye alındı"); }}>İşi beklemeye al</button>
                 </div>
               </div>
             )}
