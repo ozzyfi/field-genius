@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMock, type SupportCategory } from "@/lib/mock";
 import { PartPicker } from "./Pickers";
-import { Package, UserCog, Users2, Lock, RotateCcw, ArrowLeftRight, Camera, Send, BellRing, CheckCircle2 } from "lucide-react";
+import { Package, UserCog, Users2, Lock, RotateCcw, ArrowLeftRight, Send, BellRing, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 const CATEGORIES: { k: SupportCategory; label: string; icon: any }[] = [
@@ -13,20 +13,20 @@ const CATEGORIES: { k: SupportCategory; label: string; icon: any }[] = [
   { k: "vardiya", label: "Vardiya devri", icon: ArrowLeftRight },
 ];
 
-const RESOLUTIONS: Record<SupportCategory, { label: string }[]> = {
-  parca: [{ label: "Parça geldi" }],
-  uzman: [{ label: "Yanıt geldi" }],
-  ekip: [{ label: "Ekip işi devraldı" }],
-  erisim: [{ label: "Erişim sağlandı" }],
-  tekraryok: [{ label: "Arıza tekrarlandı" }, { label: "Gözlem tamamlandı" }],
-  vardiya: [{ label: "Devir kabul edildi" }],
+const RESOLUTIONS: Record<SupportCategory, string[]> = {
+  parca: ["Parça geldi"],
+  uzman: ["Yanıt geldi"],
+  ekip: ["Ekip işi devraldı"],
+  erisim: ["Erişim sağlandı"],
+  tekraryok: ["Arıza tekrarlandı", "Gözlem tamamlandı"],
+  vardiya: ["Devir kabul edildi"],
 };
 
-export function SupportFlow({ workId, onBack }: { workId: string; onBack: () => void }) {
-  const { getDraft, updateDraft } = useMock();
+export function SupportFlow({ workId, onBack, initialCategory }: { workId: string; onBack: () => void; initialCategory?: SupportCategory }) {
+  const { getDraft, openSupport } = useMock();
   const draft = getDraft(workId);
   const support = draft?.support;
-  const [cat, setCat] = useState<SupportCategory | null>(support?.category ?? null);
+  const [cat, setCat] = useState<SupportCategory | null>(support?.category ?? initialCategory ?? null);
   const [picker, setPicker] = useState(false);
   const [body, setBody] = useState<Record<string, any>>(support?.body ?? {});
 
@@ -34,14 +34,7 @@ export function SupportFlow({ workId, onBack }: { workId: string; onBack: () => 
 
   function submit() {
     if (!cat) return;
-    updateDraft(workId, {
-      support: {
-        category: cat,
-        body,
-        waitingSince: new Date().toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
-        timeline: [{ at: "Şimdi", text: `${CATEGORIES.find((c) => c.k === cat)!.label} talebi oluşturuldu` }],
-      },
-    });
+    openSupport(workId, { category: cat, body });
     toast.success("Talep oluşturuldu — ilgili kişi/ekip bilgilendirildi");
   }
 
@@ -71,7 +64,6 @@ export function SupportFlow({ workId, onBack }: { workId: string; onBack: () => 
             <option value="dusuk">Aciliyet: Düşük</option><option value="normal">Aciliyet: Normal</option><option value="yuksek">Aciliyet: Yüksek</option><option value="kritik">Aciliyet: Kritik</option>
           </select>
           <input className="input" placeholder="Hedef ekip / depo" value={body.target ?? ""} onChange={(e) => setBody({ ...body, target: e.target.value })} />
-          <button className="btn btn-ghost w-full" onClick={() => toast("Fotoğraf eklendi (demo)")}><Camera className="h-4 w-4" /> Fotoğraf ekle</button>
           <textarea className="input" placeholder="Talep notu" rows={3} value={body.note ?? ""} onChange={(e) => setBody({ ...body, note: e.target.value })} />
           {picker && <PartPicker onPick={(p) => { setBody({ ...body, part: p, code: p.code }); setPicker(false); }} onClose={() => setPicker(false)} />}
         </div>
@@ -95,7 +87,6 @@ export function SupportFlow({ workId, onBack }: { workId: string; onBack: () => 
           <textarea className="input" placeholder="Devir nedeni" rows={2} value={body.reason ?? ""} onChange={(e) => setBody({ ...body, reason: e.target.value })} />
           <textarea className="input" placeholder="Mevcut durum" rows={2} value={body.state ?? ""} onChange={(e) => setBody({ ...body, state: e.target.value })} />
           <textarea className="input" placeholder="Şu ana kadar yapılanlar" rows={2} value={body.done ?? ""} onChange={(e) => setBody({ ...body, done: e.target.value })} />
-          <input className="input" placeholder="Eklenecek kanıt" value={body.evidence ?? ""} onChange={(e) => setBody({ ...body, evidence: e.target.value })} />
         </div>
       )}
 
@@ -126,7 +117,6 @@ export function SupportFlow({ workId, onBack }: { workId: string; onBack: () => 
           <textarea className="input" placeholder="Mevcut durum" rows={2} value={body.condition ?? ""} onChange={(e) => setBody({ ...body, condition: e.target.value })} />
           <textarea className="input" placeholder="Tamamlanan kontroller" rows={2} value={body.checks ?? ""} onChange={(e) => setBody({ ...body, checks: e.target.value })} />
           <textarea className="input" placeholder="Önerilen sonraki adım" rows={2} value={body.next ?? ""} onChange={(e) => setBody({ ...body, next: e.target.value })} />
-          <input className="input" placeholder="Kanıt (foto/video)" value={body.evidence ?? ""} onChange={(e) => setBody({ ...body, evidence: e.target.value })} />
           <textarea className="input" placeholder="Devir notu" rows={2} value={body.note ?? ""} onChange={(e) => setBody({ ...body, note: e.target.value })} />
         </div>
       )}
@@ -139,24 +129,38 @@ export function SupportFlow({ workId, onBack }: { workId: string; onBack: () => 
   );
 }
 
+function fieldLabels(cat: SupportCategory): Record<string, string> {
+  switch (cat) {
+    case "parca": return { code: "Parça kodu", qty: "Adet", urgency: "Aciliyet", target: "Hedef ekip / depo", note: "Not" };
+    case "uzman": return { expertise: "Uzmanlık", target: "Kişi / ekip", summary: "Özet", evidence: "Kanıt", eta: "Beklenen yanıt" };
+    case "ekip": return { team: "Hedef ekip", reason: "Neden", state: "Mevcut durum", done: "Yapılanlar" };
+    case "erisim": return { access: "Erişim", dept: "Departman", reason: "Açıklama", eta: "Beklenen erişim" };
+    case "tekraryok": return { conditions: "Koşullar", duration: "Süre", params: "Parametreler", ifRecur: "Tekrarlarsa" };
+    case "vardiya": return { receiver: "Devralan", condition: "Durum", checks: "Kontroller", next: "Sonraki adım", note: "Not" };
+  }
+}
+
 function WaitingScreen({ workId, onBack }: { workId: string; onBack: () => void }) {
-  const { getDraft, updateDraft } = useMock();
+  const { getDraft, updateDraft, resolveSupport } = useMock();
   const draft = getDraft(workId);
   const s = draft?.support;
   if (!s) return null;
   const resolutions = RESOLUTIONS[s.category];
+  const labels = fieldLabels(s.category);
+  const cat = CATEGORIES.find((c) => c.k === s.category)!;
+
+  const [resolutionForm, setResolutionForm] = useState<null | string>(null);
+  const [resBody, setResBody] = useState<Record<string, any>>({});
 
   function push(text: string) {
     updateDraft(workId, { support: { ...s!, timeline: [{ at: "Şimdi", text }, ...s!.timeline] } });
   }
-  function resolve(label: string) {
-    push(label);
-    updateDraft(workId, { support: { ...s!, resolved: true, timeline: [{ at: "Şimdi", text: `${label} — işe devam edildi` }, ...s!.timeline] } });
-    toast.success("İşe devam et");
+  function confirmResolve() {
+    if (!resolutionForm) return;
+    resolveSupport(workId, { label: resolutionForm, ...resBody });
+    toast.success("İşe devam et — kaldığın adımdan devam");
     onBack();
   }
-
-  const cat = CATEGORIES.find((c) => c.k === s.category)!;
 
   return (
     <div className="space-y-3">
@@ -170,7 +174,18 @@ function WaitingScreen({ workId, onBack }: { workId: string; onBack: () => void 
 
       <div className="card-soft p-4">
         <div className="font-semibold mb-2">Talep detayı</div>
-        <pre className="text-[12px] whitespace-pre-wrap text-muted-foreground">{JSON.stringify(s.body, null, 2)}</pre>
+        <div className="space-y-1 text-sm">
+          {Object.entries(labels).map(([k, lbl]) => {
+            const v = s.body?.[k];
+            if (!v) return null;
+            return (
+              <div key={k} className="flex justify-between gap-3 border-b border-border last:border-0 py-1">
+                <span className="text-muted-foreground">{lbl}</span>
+                <span className="text-right max-w-[60%] whitespace-pre-wrap">{String(v)}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="card-soft p-4">
@@ -185,15 +200,60 @@ function WaitingScreen({ workId, onBack }: { workId: string; onBack: () => void 
         </ul>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <button className="btn btn-ghost" onClick={() => { push("Hatırlatma gönderildi"); toast.success("Hatırlatma gönderildi"); }}><BellRing className="h-4 w-4" /> Hatırlat</button>
-        <button className="btn btn-ghost" onClick={onBack}>Kapat</button>
-        {resolutions.map((r) => (
-          <button key={r.label} className="btn btn-primary col-span-2" onClick={() => resolve(r.label)}>
-            <CheckCircle2 className="h-4 w-4" /> {r.label}
-          </button>
-        ))}
-      </div>
+      {!resolutionForm ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn btn-ghost" onClick={() => { push("Hatırlatma gönderildi"); toast.success("Hatırlatma gönderildi"); }}><BellRing className="h-4 w-4" /> Hatırlat</button>
+          <button className="btn btn-ghost" onClick={onBack}>Kapat</button>
+          {resolutions.map((r) => (
+            <button key={r} className="btn btn-primary col-span-2" onClick={() => setResolutionForm(r)}>
+              <CheckCircle2 className="h-4 w-4" /> {r}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="card-soft p-4 space-y-2">
+          <div className="font-semibold mb-1">{resolutionForm}</div>
+          {s.category === "parca" && (
+            <>
+              <input className="input" placeholder="Teslim alınan parça notu" value={resBody.received ?? ""} onChange={(e) => setResBody({ ...resBody, received: e.target.value })} />
+              <input className="input" placeholder="Seri / lot" value={resBody.serial ?? ""} onChange={(e) => setResBody({ ...resBody, serial: e.target.value })} />
+            </>
+          )}
+          {s.category === "uzman" && (
+            <>
+              <textarea className="input" placeholder="Uzman yanıtı / önerilen aksiyon" rows={3} value={resBody.response ?? ""} onChange={(e) => setResBody({ ...resBody, response: e.target.value })} />
+              <input className="input" placeholder="Önerilen aksiyon" value={resBody.action ?? ""} onChange={(e) => setResBody({ ...resBody, action: e.target.value })} />
+            </>
+          )}
+          {s.category === "ekip" && (
+            <>
+              <input className="input" placeholder="Devralan ekip" value={resBody.takenBy ?? ""} onChange={(e) => setResBody({ ...resBody, takenBy: e.target.value })} />
+              <input className="input" placeholder="Devralan kişi" value={resBody.takenByPerson ?? ""} onChange={(e) => setResBody({ ...resBody, takenByPerson: e.target.value })} />
+              <input className="input" placeholder="Devir tarihi/saati" value={resBody.handedAt ?? ""} onChange={(e) => setResBody({ ...resBody, handedAt: e.target.value })} />
+            </>
+          )}
+          {s.category === "erisim" && (
+            <>
+              <input className="input" placeholder="Erişim sağlayan kişi" value={resBody.provider ?? ""} onChange={(e) => setResBody({ ...resBody, provider: e.target.value })} />
+              <input className="input" placeholder="Erişim saati" value={resBody.atTime ?? ""} onChange={(e) => setResBody({ ...resBody, atTime: e.target.value })} />
+              <textarea className="input" rows={2} placeholder="Not (opsiyonel)" value={resBody.note ?? ""} onChange={(e) => setResBody({ ...resBody, note: e.target.value })} />
+            </>
+          )}
+          {s.category === "tekraryok" && (
+            <textarea className="input" rows={3} placeholder="Gözlem sonucu" value={resBody.observation ?? ""} onChange={(e) => setResBody({ ...resBody, observation: e.target.value })} />
+          )}
+          {s.category === "vardiya" && (
+            <>
+              <input className="input" placeholder="Devralan teknisyen" value={resBody.receiver ?? ""} onChange={(e) => setResBody({ ...resBody, receiver: e.target.value })} />
+              <textarea className="input" rows={2} placeholder="Devir notu" value={resBody.note ?? ""} onChange={(e) => setResBody({ ...resBody, note: e.target.value })} />
+            </>
+          )}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button className="btn btn-ghost" onClick={() => setResolutionForm(null)}>Vazgeç</button>
+            <button className="btn btn-primary" onClick={confirmResolve}><CheckCircle2 className="h-4 w-4" /> Onayla ve devam et</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
