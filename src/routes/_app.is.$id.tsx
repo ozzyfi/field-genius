@@ -237,7 +237,7 @@ function WorkDetailPage() {
               ) : type === "bakim" ? (
                 <MaintenanceFlow workId={w.id} workTitle={w.title} workCode={w.code} onReview={() => setReviewOpen(true)} />
               ) : type === "test" ? (
-                <TestFlow workId={w.id} workTitle={w.title} workCode={w.code} onReview={() => setReviewOpen(true)} />
+                <TestFlow workId={w.id} workTitle={w.title} workCode={w.code} onReview={() => setReviewOpen(true)} onSupport={() => setPath("support")} />
               ) : type === "kurulum" ? (
                 <InstallationFlow workId={w.id} workTitle={w.title} workCode={w.code} onReview={() => setReviewOpen(true)} />
               ) : type === "parca" ? (
