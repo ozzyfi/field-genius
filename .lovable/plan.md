@@ -1,115 +1,160 @@
-# ToolA — Work-Type-Specific Workflow Refactor
 
-Front-end only. No backend, RLS, auth, migrations, or design system changes. Reuses existing visual language (cards, pills, dock, palette), Turkish copy, and existing components (pickers, evidence, AssignedIntake, SupportFlow shell, AiDiagnostic shell, FocusSheet, QuickFlows).
+# ToolA — Workflow Completion & Bug-Fix Pass
 
-## 1. State layer (extend, don't replace)
+This is a second-pass cleanup of the existing technician prototype. The current work-type flows (Fault, Maintenance, Test, Installation, Part Replacement), visual identity, floating dock, pickers, evidence components and Turkish UI are preserved. No backend, migration, RLS or auth change.
 
-**`src/lib/mock.tsx`** — extend `WorkDraft` and `MockProvider`:
-- Add: `workType`, `currentStep`, `completedSteps[]`, `checklist[]`, `measurements[]`, `diagnosticChecks[]`, `identifiedCause`, `intervention`, `partsRemoved`, `partsInstalled`, `functionalTest`, `commissioning`, `handover`, `punchList[]`, `newFindings[]`, `linkedRecords[]`, `supportRequest`, `closingTemplate`.
-- Persist whole drafts map to `localStorage` (key `toola.drafts.v2`) — hydrate on mount, write on every update (debounced).
-- Add `acceptedWorkIds` set (persisted) — drives "accepted" state.
-- Add `linkedRecords` registry (persisted) — local mock IDs for "linked fault / follow-up / retest" with bidirectional refs.
-- Helpers: `startWorkflow(workId, type)`, `setStep`, `markStepDone`, `addLinkedRecord`, `discardDraft`, `saveAndExit`.
+## Goals
 
-**`src/lib/workflows.ts`** (new) — central registry:
-```ts
-WORKFLOWS: Record<WorkType, { steps: StepDef[], requiresVoice: boolean, pathOptions: PathOption[] }>
+One typed local source of truth for every work record, with persistence that survives refresh. Status, machine, planned date, support state and completion gating actually behave differently. Every visible CTA produces a real state transition. Every evidence card is inspectable. Validation matches the work type.
+
+## Approach
+
+### A. Typed workflow store (one source of truth)
+
+Create `src/lib/workflow/` modules:
+
+```text
+workflow/
+  types.ts          // WorkflowStatus + per-type WorkDraft union
+  status.ts         // status helpers, label maps, status → list filters
+  validation.ts     // per-type required-field checks
+  progress.ts       // per-type step progress + firstIncompleteStepId
+  persistence.ts    // localStorage load/save with versioned key
+  workflow-config.ts// per-type step list, path options, labels
 ```
-- Per-type ordered `StepDef` arrays (id, label, validate(draft)).
-- `progressFor(draft)` → derives done/incomplete + `firstIncompleteStepId` from the workflow definition (not a fixed 4-step list).
 
-## 2. PathPicker per work type (`_app.is.$id.tsx`)
+Refactor `src/lib/mock.tsx`:
+- Replace `template: Record<string, any>` with a discriminated `WorkDraft` union (`FaultDraft | MaintenanceDraft | TestDraft | InstallationDraft | PartReplacementDraft | OtherDraft`).
+- Keep machine, location, plannedAt, workflowStatus, currentStepId, completedSteps, evidence, measurements, checklist, diagnosticChecks, supportRequest, linkedRecords, completionData, dirty (per record), lastSavedAt.
+- Maintain a separate completed-snapshot map so finished records keep their rich data without polluting active drafts.
+- Per-record dirty flags (Map<workId, boolean>), no global boolean.
 
-Replace the hard-coded 3-button PathPicker with type-driven options from `WORKFLOWS[type].pathOptions`:
-- `ariza` → Sorunu biliyorum / ToolA ile teşhis et / Destek-parça
-- `bakim` → Bakıma başla / Prosedürü aç / Destek-parça
-- `test` → Testi başlat / Prosedürü aç / Destek
-- `kurulum` → Kuruluma başla / Talimatı aç / Destek-eksik malzeme
-- `parca` → Parça değişimine başla / Prosedür bilgisi / Destek
+### B. Machine + planned date persistence
 
-Each option has its own icon, label, description. "Sorunu biliyorum" only renders for `ariza`.
+- New record / QR / picker / AI extract all write `machineId` + `machineName` into the draft AND into the Supabase work row when `machine_id` column exists (use existing column; do not add new ones).
+- Distinguish `machineLocation` vs `workLocation`; prefill from machine but allow override.
+- Work detail header always re-reads `draft.machine`; "Makine bağla" shows only when truly empty.
+- `plannedAt` lives in the typed draft (no schema change). `_app.islerim.tsx` filters "Bugün planlanan" by `plannedAt` instead of `created_at`. Show `Bugün / Yarın / Gecikti / Planlandı` chips on cards + detail. Immediate ("Hemen") records skip planned filtering.
 
-## 3. Work-type execution flows (new components in `src/components/flows/`)
+### C. Status model + completion gating
 
-- `FaultFlow.tsx` — wraps existing FastPath (known issue) + AiDiagnostic (refined, see §4) + SupportFlow.
-- `MaintenanceFlow.tsx` — stepper: type → procedure card → checklist (per-item OK/Sorun/N/A + note/measure/evidence) → initial measurements → actions → consumables → final measurements → new findings (each row offers "Bağlantılı arıza / Takip işi / Sadece gözlem") → next maintenance date.
-- `TestFlow.tsx` — stepper: test type+procedure → conditions → device (name/serial/calibration) → reference range (value/min/max/unit) → measurement rows → auto verdict (Geçti/Kaldı/Sınırda) → if fail/borderline: branch actions (Bağlantılı arıza / Tekrar test / Uzman desteği / Beklemeye al) → retest date.
-- `InstallationFlow.tsx` — stepper: site readiness → equipment identity (name/model/serial/QR evidence) → location → mechanical checklist → electrical/control → software/parameters → commissioning steps → commissioning measurements + test → handover (person/dept/date/training) → punch list (each item: responsible/target date/evidence/"Takip işi oluştur") → completion status (Tamam / Kısmi / Devreye alma bekliyor). Block "fully complete" unless commissioning done or explicit partial.
-- `PartReplacementFlow.tsx` — stepper: reason → removed part (name/code/serial/condition/evidence) → installed part (name/code/serial/qty/source/evidence) → installation actions → functional test (procedure/measurement/pass-fail/evidence) → if fail: revert / expert / another part / linked fault / keep blocked (block completion) → faulty-part disposition (Hurda/Garanti/Tamir/Depo/Diğer).
+- `WorkflowStatus` union as specified; map only where the existing backend `status` enum matches.
+- Installation: `tamamlandi` blocked unless `commTestResult === "gecti"` AND `completionStatus === "tam"`; otherwise `kismi_tamamlandi` or `devreye_alma_bekliyor`. Open punch-list items remain visible.
+- Test: failing/borderline result requires choosing linked-fault / retest / expert / blocked / approved-exception before close.
+- Part replacement: failed `funcTest` blocks completion; user must pick expert / other part / linked fault / revert / block — each opens its real flow (SupportFlow forms, linked record creation).
 
-All flows share a thin `<StepShell>` with breadcrumb + back, and use existing `EvidencePicker`, `MachinePicker`, `LocationPicker`, `PartPicker`.
+### D. Support pause / resume
 
-## 4. Refine AiDiagnostic
+- When `draft.supportRequest && !supportRequest.resolvedAt`: `_app.is.$id.tsx` hides PathPicker and renders SupportWaiting as primary state.
+- Preserve `interruptedStepId` on the draft. Resolution sheet (per category) writes resolution payload, marks resolved, restores `currentStepId = interruptedStepId`, shows "Kaldığın yerden devam et".
+- Category-specific resolution actions (Parça geldi / Yanıt geldi / Ekip devraldı / Erişim sağlandı / Arıza tekrarlandı | Gözlem tamamlandı / Devir kabul edildi) — refactor `SupportFlow.tsx` to render only the relevant action per category, with labelled rows (no JSON dumps).
+- "Destek bekleyen" list filter only includes unresolved support.
 
-Update `AiDiagnostic.tsx` to: symptom summary → one suggested check at a time → "Kanıt ekle" opens existing EvidencePicker → "Ölçüm gir" opens measurement sheet → record result → next check → "Nedeni belirlendi → müdahaleye dön". Persist each check (`diagnosticChecks[]`) and identified cause to draft, then hand off to closing.
+### E. Continue card routing
 
-## 5. ContinueCard — work-type aware
+`ContinueCard` chooses target by:
+1. Unresolved support → support waiting screen.
+2. Completed → completed detail (and removed from active anyway).
+3. Partial → first remaining required step or punch-list.
+4. Any incomplete step → that step.
+5. All complete → final review.
 
-Replace fixed 4-step list with `progressFor(draft)` output. CTA navigates to `firstIncompleteStepId` (not always step 1). Show counts like "Checklist 6/8".
+CTA label adapts to context ("Son ölçümlere devam et", "Test sonucunu değerlendir", "Devreye almaya devam et", "Kontrol et ve kapat").
 
-## 6. FinalReview — per type
+### F. Procedure / full-screen viewers
 
-Refactor `FinalReview.tsx` into a switch over `workType`, rendering only relevant sections (Fault / Maintenance / Test / Installation / PartReplacement summaries listed in spec §8). Validation rules per type; voice required only for `ariza` (others optional).
+- "Prosedürü aç" / "Talimatı aç" open a `DocumentViewerSheet` with sample content; on close return to first incomplete step of the current type (not path picker).
+- "Kaynağı tam ekran aç" opens the same viewer full screen.
+- Evidence cards (photo/video/audio/measurement) open `EvidencePreviewSheet` with full-screen photo, `<video controls>`, `<audio controls>`, transcript display, before/after side-by-side. Add Replace / Remove / Go-to-step buttons.
+- Same preview used in `FinalReview` and `CompletedView` (read-only in completed; correction request CTA only).
 
-## 7. CompletedView — per type
+### G. Per-type validation
 
-Refactor the completed branch in `_app.is.$id.tsx` into `<CompletedView type=...>` rendering: timeline (technician, assigner, started/completed, waiting periods) + type-specific block + evidence gallery + linked records list + approval state. Same card visual style.
+Implement in `validation.ts`:
+- Fault: initial evidence + voice + final evidence + intervention + result + root-cause kind (kesin/tahmini/bilinmiyor).
+- Maintenance: type + procedure decision + checklist done + actions + nextDate (when applicable). Explicit N/A toggles: "Ölçüm gerekli değil", "Sarf kullanılmadı", "Parça kullanılmadı", "Yeni bulgu yok". Checklist "Sorun bulundu" → require note/evidence + decision (linked fault / follow-up / observation).
+- Test: testType + procedure + ref range + unit + device + calibration state + ≥1 measurement + verdict. Calibration date when required. Retest date when retest chosen.
+- Installation: equipment identity + location + site suitability + each mechanical / electrical checklist item explicitly `Uygun | Sorun bulundu | Uygulanamaz` + commissioning result + completion state. Kısmi requires reason + open items + owner + due. Training fields when required.
+- Part: reason + removed/installed identity + codes + serials (or "Seri numarası yok") + qty + source + removed condition + disposition + install actions + funcTest procedure + funcTest result + final evidence.
 
-## 8. Linked records UI
+### H. Assigned-work intake (decline / transfer)
 
-Small `LinkedRecordsList` showing labels: "Bu kayıttan oluşturuldu", "Bağlantılı arıza", "Takip işi", "Tekrar test". Click → navigates to that mock work id. Creation buttons live inside MaintenanceFlow findings, TestFlow fail branch, InstallationFlow punch items, PartReplacementFlow fail branch.
+Multi-step sheets in `AssignedIntake.tsx`:
+- Decline: reason → explanation → optional evidence → confirm. Persist all four + timestamp.
+- Transfer: technician → current-state summary → handover note → evidence → recommended next step → confirm. Persist all + timestamp.
+- Related records / attachments openable via existing preview sheet.
 
-## 9. SupportFlow — category-specific
+### I. Failed-branch real flows
 
-Refactor `SupportFlow.tsx`: each category gets its own form (fields from spec §11) and its own waiting-screen resolution action(s):
-- Parça: "Parça geldi"
-- Uzman: "Yanıt geldi"
-- Başka ekip: "Ekip işi devraldı"
-- Erişim yok: "Erişim sağlandı"
-- Tekrarlanamadı: "Arıza tekrarlandı" / "Gözlem tamamlandı"
-- Vardiya devri: "Devir kabul edildi"
+`AiDiagnostic`, `TestFlow`, `PartReplacementFlow`:
+- "Uzman desteği iste" → opens `SupportFlow` (expert).
+- "İşi beklemeye al" → opens block-reason form, sets `workflowStatus = "blokeli"`.
+- "Başka parça iste" → opens part-request form.
+- "Bağlantılı arıza oluştur" → creates linked mock record (already exists; ensure visible link).
+- "Tekrar test planla" → creates linked retest record with required date.
+- Linked relations show on detail: "Bu kayıttan oluşturuldu / Bağlantılı arıza / Tekrar test / Takip işi / Parça talebi".
 
-After resolution → returns to the active workflow at the step it paused on.
+### J. Draft save / discard
 
-## 10. AssignedIntake additions
+`AppShell` dirty-state sheet:
+- Save: persist draft, set `lastSavedAt`, clear that record's dirty flag, then navigate; toast "Taslak cihaza kaydedildi".
+- Continue: close sheet only.
+- Discard: revert to last persisted snapshot (or delete if new), clear dirty, then navigate.
+- Per-record dirty tracking driven by every mutation (checklist, measurement, evidence, support, diagnostic).
 
-Add buttons: "Ek bilgi iste", richer decline (free-text reason), transfer note + current-state summary + evidence attachments. Related records & attachments open in a `BottomSheet` preview. On "Kabul et ve başlat" → call `startWorkflow(id, type)` then route to the type's PathPicker.
+### K. Misc fixes
 
-## 11. QR fix in `_app.yeni.tsx`
+- `_app.islerim.tsx` search: matches title, description, work code, machine name/code/model/serial, location.
+- Work-type labels via `WORK_TYPE_LABELS` map; never render raw enum.
+- Profile button in `AppShell` opens a profile sheet (Kullanıcı bilgileri / Senkronizasyon / Ayarlar / Çıkış yap with confirm) — no immediate logout.
+- Active-work card filter excludes completed/cancelled/resolved-only records.
+- Audit and wire remaining dead buttons (photo-add-later, full-screen source, audio playback, measurement preview, related-record open, AI diagnostic "Kanıt ekle" / "Ölçüm gir").
 
-After QR resolves a machine, open a `WorkTypeChooserSheet` ("Bu makine için ne yapmak istiyorsun?" → Arıza / Bakım / Test / Parça / Gözlem). Selection creates the work with machine+location pre-filled and routes into the corresponding workflow.
+### L. Cleanup
 
-## 12. Persistence
-
-All draft state persists via `localStorage` (debounced JSON). On mount, `MockProvider` hydrates. "Taslağı kaydet ve çık" calls a save+nav helper; "Değişiklikleri sil" calls `discardDraft(id)` which removes the entry and clears accepted flag if applicable.
+- Remove obsolete `CompletionTemplates.tsx` (replaced by per-type flows).
+- Consolidate the QR work-type chooser (`WorkTypeChooserSheet`) — single implementation.
+- Remove unused step helpers; keep `workflow-config.ts` as the single registry.
 
 ## Files
 
-**New**
-- `src/lib/workflows.ts`
-- `src/components/flows/StepShell.tsx`
-- `src/components/flows/FaultFlow.tsx`
-- `src/components/flows/MaintenanceFlow.tsx`
-- `src/components/flows/TestFlow.tsx`
-- `src/components/flows/InstallationFlow.tsx`
-- `src/components/flows/PartReplacementFlow.tsx`
-- `src/components/flows/MeasurementSheet.tsx`
-- `src/components/LinkedRecordsList.tsx`
-- `src/components/WorkTypeChooserSheet.tsx`
-- `src/components/CompletedView.tsx`
+New:
+- `src/lib/workflow/types.ts`, `status.ts`, `validation.ts`, `progress.ts`, `persistence.ts`, `workflow-config.ts`
+- `src/components/EvidencePreviewSheet.tsx`
+- `src/components/DocumentViewerSheet.tsx`
+- `src/components/ProfileSheet.tsx`
+- `src/components/SupportWaiting.tsx` (extracted from `SupportFlow`)
 
-**Modified**
-- `src/lib/mock.tsx` (extend draft shape + localStorage persistence + linked records)
-- `src/components/AiDiagnostic.tsx` (one-check-at-a-time + evidence/measurement wiring)
-- `src/components/ContinueCard.tsx` (workflow-driven progress)
-- `src/components/FinalReview.tsx` (per-type summaries + per-type validation)
-- `src/components/SupportFlow.tsx` (category forms + resolutions)
-- `src/components/AssignedIntake.tsx` (extra actions + related-records sheet)
-- `src/components/CompletionTemplates.tsx` (kept; consumed inside per-type flows where useful)
-- `src/routes/_app.is.$id.tsx` (PathPicker per type, dispatch to FaultFlow/MaintenanceFlow/…, CompletedView)
-- `src/routes/_app.yeni.tsx` (QR → WorkTypeChooserSheet)
-- `src/routes/_app.islerim.tsx` (Continue card uses new progress)
+Edited:
+- `src/lib/mock.tsx` (typed draft + per-record dirty + completed snapshot)
+- `src/lib/workflows.ts` → thin re-export from new modules (kept temporarily for callers)
+- `src/components/AppShell.tsx` (profile sheet, dirty sheet behavior)
+- `src/components/ContinueCard.tsx` (smart routing + CTA)
+- `src/components/FinalReview.tsx` + `CompletedView.tsx` (evidence preview, per-type sections)
+- `src/components/AssignedIntake.tsx` (multi-step decline/transfer)
+- `src/components/SupportFlow.tsx` (category-only actions, resume)
+- `src/components/AiDiagnostic.tsx` (real "Kanıt ekle"/"Ölçüm gir"/branch actions)
+- `src/components/flows/*.tsx` (typed draft, validation, branch wiring)
+- `src/components/QuickFlows.tsx` (machine persistence in QR/AI paths)
+- `src/routes/_app.islerim.tsx` (search, planned filter, active-work filter, labels)
+- `src/routes/_app.is.$id.tsx` (support-pause routing, machine display, continue routing)
+- `src/routes/_app.yeni.tsx` (plannedAt + machine persistence)
 
-## Non-goals
+Removed:
+- `src/components/CompletionTemplates.tsx`
 
-No backend, RLS, auth, migration, edge function changes. No redesign of palette, typography, cards, dock, quick-entry visuals, pickers, evidence components, Turkish copy. No manager/admin surfaces.
+## Out of scope
+
+- Any backend, migration, RLS or auth change.
+- Visual redesign, new modules, dashboards, navigation items.
+- New schema columns — prototype-only fields stay in the typed local draft.
+
+## Verification
+
+- TypeScript build passes.
+- Manual walk for each work type: create → step through → refresh mid-flow → resume → support pause → resolve → resume → close → completed detail.
+- Installation failed commissioning stays partial.
+- Part failed test blocks close and offers branch actions.
+- Test failed result requires retest/linked-fault/expert/block/exception.
+- Draft save and discard verified on a dirty record.
+- Evidence preview opens from final review and completed detail.

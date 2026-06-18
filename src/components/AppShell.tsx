@@ -1,33 +1,18 @@
-import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Home, History, Sparkles, Plus, Bell, LogOut, Wifi, WifiOff, CloudUpload, CheckCheck, AlertTriangle } from "lucide-react";
+import { useRouterState, useNavigate } from "@tanstack/react-router";
+import { Home, History, Sparkles, Plus, Bell, LogOut } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
 import { useMock } from "@/lib/mock";
+import { ProfileSheet } from "./ProfileSheet";
+import { SyncChip } from "./AppShell.helpers";
 
-export function SyncChip() {
-  const { sync, pendingCount } = useMock();
-  const map: Record<string, { icon: any; text: string; cls: string }> = {
-    online: { icon: Wifi, text: "Senkronize", cls: "text-success" },
-    offline: { icon: WifiOff, text: "Çevrimdışı", cls: "text-muted-foreground" },
-    syncing: { icon: CloudUpload, text: "Yükleniyor…", cls: "text-primary" },
-    queued: { icon: CloudUpload, text: `${pendingCount} kayıt bekliyor`, cls: "text-warning-foreground" },
-    failed: { icon: AlertTriangle, text: "Yükleme başarısız", cls: "text-destructive" },
-    conflict: { icon: AlertTriangle, text: "Çakışma", cls: "text-destructive" },
-  };
-  const v = map[sync] ?? map.online;
-  const Icon = v.icon;
-  return (
-    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 h-7 rounded-full bg-surface-2 border border-border ${v.cls}`}>
-      <Icon className="h-3.5 w-3.5" />
-      {v.text}
-    </span>
-  );
-}
+export { SyncChip };
 
 export function AppHeader({ title, right, back }: { title: string; right?: ReactNode; back?: () => void }) {
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
   const { unreadCount } = useMock();
   const navigate = useNavigate();
+  const [profileOpen, setProfileOpen] = useState(false);
   const initials = (profile?.full_name || "T").trim().split(/\s+/).map((s) => s[0]).join("").slice(0, 2).toUpperCase();
   return (
     <header className="sticky top-0 z-30 backdrop-blur supports-[backdrop-filter]:bg-[color-mix(in_oklch,var(--color-background)_85%,transparent)] border-b border-border">
@@ -55,13 +40,15 @@ export function AppHeader({ title, right, back }: { title: string; right?: React
           </button>
           <button
             className="h-9 w-9 grid place-items-center rounded-full bg-ink text-ink-foreground text-xs font-bold tap"
-            onClick={async () => { await signOut(); navigate({ to: "/auth" }); }}
-            title="Çıkış"
+            onClick={() => setProfileOpen(true)}
+            title="Profil"
+            aria-label="Profil"
           >
             {initials || <LogOut className="h-4 w-4" />}
           </button>
         </div>
       </div>
+      {profileOpen && <ProfileSheet onClose={() => setProfileOpen(false)} />}
     </header>
   );
 }
@@ -69,7 +56,7 @@ export function AppHeader({ title, right, back }: { title: string; right?: React
 export function BottomNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
-  const { focus, dirty } = useMock();
+  const { focus, anyDirty, saveDraftSnapshot, discardDraft, drafts } = useMock();
   const [confirm, setConfirm] = useState<null | { to: string }>(null);
 
   if (focus) return null;
@@ -82,8 +69,32 @@ export function BottomNav() {
 
   const hidePlus = pathname.startsWith("/yeni");
 
+  // detect the currently-edited workId from URL (/is/:id)
+  function currentWorkId(): string | null {
+    const m = pathname.match(/^\/is\/([^/]+)/);
+    return m ? m[1] : null;
+  }
+
   function go(to: string) {
-    if (dirty && pathname !== to) { setConfirm({ to }); return; }
+    if (anyDirty() && pathname !== to) { setConfirm({ to }); return; }
+    navigate({ to: to as any });
+  }
+
+  function onSave() {
+    if (!confirm) return;
+    const id = currentWorkId();
+    if (id) saveDraftSnapshot(id);
+    else Object.keys(drafts).forEach(saveDraftSnapshot);
+    const to = confirm.to;
+    setConfirm(null);
+    navigate({ to: to as any });
+  }
+  function onDiscard() {
+    if (!confirm) return;
+    const id = currentWorkId();
+    if (id) discardDraft(id);
+    const to = confirm.to;
+    setConfirm(null);
     navigate({ to: to as any });
   }
 
@@ -133,11 +144,11 @@ export function BottomNav() {
             <div className="font-semibold mb-1">Kaydedilmemiş değişiklikler var</div>
             <p className="text-sm text-muted-foreground mb-4">Bu ekrandan ayrılırsan yaptıkların kaybolabilir.</p>
             <div className="space-y-2">
-              <button className="btn btn-primary w-full" onClick={() => { setConfirm(null); navigate({ to: confirm.to as any }); }}>
+              <button className="btn btn-primary w-full" onClick={onSave}>
                 Taslağı kaydet ve çık
               </button>
               <button className="btn btn-ghost w-full" onClick={() => setConfirm(null)}>Düzenlemeye devam et</button>
-              <button className="btn w-full text-destructive" onClick={() => { setConfirm(null); navigate({ to: confirm.to as any }); }}>
+              <button className="btn w-full text-destructive" onClick={onDiscard}>
                 Değişiklikleri sil
               </button>
             </div>

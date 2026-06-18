@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useMock } from "@/lib/mock";
 import { Screen } from "@/components/AppShell";
 import { WORK_TYPE_LABEL, genWorkCode } from "@/lib/toola";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ type QuickFlow = null | "voice" | "voice-preview" | "camera" | "camera-preview" 
 
 function YeniPage() {
   const { user, profile } = useAuth();
+  const { updateDraft } = useMock();
   const navigate = useNavigate();
   const [type, setType] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -36,13 +38,12 @@ function YeniPage() {
   const [priority, setPriority] = useState("normal");
   const [plan, setPlan] = useState<"now" | "planned">("now");
   const [planDate, setPlanDate] = useState("");
-  const [machine, setMachine] = useState<{ id: string; name: string; location: string } | null>(null);
+  const [machine, setMachine] = useState<{ id: string; name: string; location: string; code?: string; model?: string; serial?: string } | null>(null);
   const [location, setLocation] = useState<{ label: string } | null>(null);
   const [machinePicker, setMachinePicker] = useState(false);
   const [locationPicker, setLocationPicker] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Quick flows state
   const [flow, setFlow] = useState<QuickFlow>(null);
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [cameraPayload, setCameraPayload] = useState<{ count: number; note: string } | null>(null);
@@ -55,6 +56,17 @@ function YeniPage() {
     if (!_title || !profile?.org_id) return;
     setBusy(true);
     const code = genWorkCode(_type);
+
+    // Try to resolve a machine_id from the picked machine (by name); if not, leave null.
+    let machine_id: string | null = null;
+    const pickedName = (fields?.machineName) ?? machine?.name ?? qrMachine?.name;
+    if (pickedName) {
+      try {
+        const { data: m } = await supabase.from("machines").select("id, name, location, model, serial").eq("name", pickedName).maybeSingle();
+        if (m) machine_id = m.id;
+      } catch {}
+    }
+
     const { data, error } = await supabase
       .from("work_records")
       .insert({
@@ -64,10 +76,24 @@ function YeniPage() {
         created_by: user?.id, assigned_to: user?.id,
         priority: (fields?.priority ?? priority) as any,
         location_note: fields?.location ?? location?.label ?? null,
+        machine_id,
       })
       .select("id").single();
     setBusy(false);
     if (error) return toast.error(error.message);
+
+    // Persist front-end-only fields in the local draft (plannedAt, machine details, work location).
+    const m = machine ?? (qrMachine ? { id: qrMachine.id ?? "qr", name: qrMachine.name, location: qrMachine.location, code: qrMachine.code, model: qrMachine.model, serial: qrMachine.serial } : null);
+    updateDraft(data!.id, {
+      workType: _type as any,
+      machine: m,
+      workLocation: fields?.location ?? location?.label ?? m?.location ?? null,
+      plannedAt: plan === "planned" && planDate ? new Date(planDate).toISOString() : null,
+      immediate: plan === "now",
+      workflowStatus: "devam_ediyor",
+      accepted: true,
+    });
+
     toast.success("Kayıt oluşturuldu");
     navigate({ to: "/is/$id", params: { id: data!.id } });
   }
@@ -109,7 +135,7 @@ function YeniPage() {
           />
         )}
         {flow === "voice-preview" && (
-          <AiExtractPreview transcript={voiceTranscript} onClose={() => setFlow(null)} onCreate={create} />
+          <AiExtractPreview transcript={voiceTranscript} onClose={() => setFlow(null)} onCreate={(f) => create({ ...f, machineName: f.machine })} />
         )}
         {flow === "camera" && (
           <CameraCaptureSheet
@@ -121,7 +147,7 @@ function YeniPage() {
           <AiExtractPreview
             transcript={cameraPayload.note}
             initial={{ type: "ariza", title: "Fotoğraflı saha kaydı", description: `${cameraPayload.count} fotoğraf eklendi. ${cameraPayload.note}` }}
-            onClose={() => setFlow(null)} onCreate={create}
+            onClose={() => setFlow(null)} onCreate={(f) => create({ ...f, machineName: f.machine })}
           />
         )}
         {flow === "qr" && (
@@ -140,9 +166,9 @@ function YeniPage() {
                 parca: `${qrMachine.name} — parça değişimi`,
                 diger: `${qrMachine.name} — gözlem`,
               };
-              create({ type: wt, title: titleByType[wt], description: `Makine: ${qrMachine.name} (${qrMachine.code})`, location: qrMachine.location });
+              create({ type: wt, title: titleByType[wt], description: `Makine: ${qrMachine.name} (${qrMachine.code})`, location: qrMachine.location, machineName: qrMachine.name });
             }}
-            onHistory={() => { setFlow(null); toast("Makine geçmişi — Geçmiş sekmesinden filtrele"); navigate({ to: "/gecmis" }); }}
+            onHistory={() => { setFlow(null); navigate({ to: "/gecmis" }); }}
           />
         )}
       </Screen>
@@ -164,7 +190,7 @@ function YeniPage() {
         <div>
           <label className="label block mb-1">Makine</label>
           <button onClick={() => setMachinePicker(true)} className="btn btn-ghost w-full justify-between">
-            {machine ? machine.name : "Makine seç"} <span className="text-muted-foreground text-xs">{machine?.location ?? ""}</span>
+            {machine ? machine.name : "Makine bağla"} <span className="text-muted-foreground text-xs">{machine?.location ?? ""}</span>
           </button>
         </div>
         <div>
@@ -194,9 +220,9 @@ function YeniPage() {
           )}
         </div>
 
-        <button className="btn btn-ghost w-full"><Camera className="h-4 w-4" /> Fotoğraf ekle (sonra)</button>
+        <button className="btn btn-ghost w-full" onClick={() => setFlow("camera")}><Camera className="h-4 w-4" /> Fotoğraf ekle</button>
 
-        <button disabled={busy || !title.trim()} onClick={() => create()} className="btn btn-primary w-full">
+        <button disabled={busy || !title.trim() || (plan === "planned" && !planDate)} onClick={() => create()} className="btn btn-primary w-full">
           {busy ? "Oluşturuluyor…" : "Kaydı oluştur ve aç"}
         </button>
       </div>
@@ -205,11 +231,17 @@ function YeniPage() {
         <MachinePicker
           onClose={() => setMachinePicker(false)}
           onScanQr={() => { setMachinePicker(false); setFlow("qr"); }}
-          onPick={(m) => { setMachine({ id: m.id, name: m.name, location: m.location }); if (!location) setLocation({ label: m.location }); setMachinePicker(false); }}
+          onPick={(m) => { setMachine({ id: m.id, name: m.name, location: m.location, code: m.code, model: m.model, serial: m.serial }); if (!location) setLocation({ label: m.location }); setMachinePicker(false); }}
         />
       )}
       {locationPicker && (
         <LocationPicker onClose={() => setLocationPicker(false)} onPick={(l) => { setLocation({ label: l.label }); setLocationPicker(false); }} />
+      )}
+      {flow === "camera" && (
+        <CameraCaptureSheet
+          onClose={() => setFlow(null)}
+          onDone={(photos, note) => { toast.success(`${photos.length} fotoğraf eklendi`); if (note && !desc) setDesc(note); setFlow(null); }}
+        />
       )}
     </Screen>
   );

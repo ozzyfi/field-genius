@@ -1,6 +1,7 @@
-import { useMock } from "@/lib/mock";
+import { useState } from "react";
+import { useMock, type DraftEvidence } from "@/lib/mock";
 import { missingForReview, WORKFLOWS, type WorkType } from "@/lib/workflows";
-import { EvidenceGrid } from "./EvidencePicker";
+import { EvidenceGrid, EvidencePreview } from "./EvidencePicker";
 import { LinkedRecordsList } from "./LinkedRecordsList";
 import { AlertTriangle, ShieldCheck, Mic } from "lucide-react";
 
@@ -9,8 +10,9 @@ export function FinalReview({ workId, type, machine, location, onClose, onConfir
   machine: string; location: string;
   onClose: () => void; onConfirm: () => void;
 }) {
-  const { getDraft } = useMock();
+  const { getDraft, updateDraft } = useMock();
   const d = getDraft(workId);
+  const [preview, setPreview] = useState<DraftEvidence | null>(null);
   if (!d) return null;
   const tpl = (d.template ?? {}) as Record<string, any>;
   const missing = missingForReview(d);
@@ -45,8 +47,9 @@ export function FinalReview({ workId, type, machine, location, onClose, onConfir
 
       <div className="card-soft p-4">
         <div className="label mb-2">Kanıt galerisi</div>
-        <EvidenceGrid items={d.evidence} />
+        <EvidenceGrid items={d.evidence} onPreview={setPreview} onRemove={(id) => updateDraft(workId, { evidence: d.evidence.filter((e) => e.id !== id) })} />
       </div>
+      {preview && <EvidencePreview e={preview} onClose={() => setPreview(null)} onRemove={(id) => updateDraft(workId, { evidence: d.evidence.filter((e) => e.id !== id) })} />}
 
       <LinkedRecordsList workId={workId} />
 

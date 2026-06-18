@@ -25,9 +25,15 @@ const FILTERS = [
   { key: "tamam", label: "Tamamlanan" },
 ] as const;
 
+function sameDay(a: Date, b: Date) { return a.toDateString() === b.toDateString(); }
+function isPlannedToday(iso?: string | null) {
+  if (!iso) return false;
+  try { return sameDay(new Date(iso), new Date()); } catch { return false; }
+}
+
 function IslerimPage() {
   const { user, profile } = useAuth();
-  const { drafts } = useMock();
+  const { drafts, getCompleted } = useMock();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("tumu");
   const [q, setQ] = useState("");
@@ -38,16 +44,22 @@ function IslerimPage() {
     queryFn: async (): Promise<WorkRow[]> => {
       const { data, error } = await supabase
         .from("work_records")
-        .select("id, code, type, status, priority, source, title, description, location_note, created_at, machine:machines(name, location)")
+        .select("id, code, type, status, priority, source, title, description, location_note, created_at, machine:machines(name, location, model, serial)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data || []) as unknown as WorkRow[];
     },
   });
 
-  // Active in-progress draft (mock) — pick the most recently saved
+  // Active in-progress draft (mock) — pick the most recently saved that is genuinely active
   const activeDraft = useMemo(() => {
-    const arr = Object.values(drafts);
+    const arr = Object.values(drafts).filter((d) => {
+      if (d.workflowStatus === "tamamlandi" || d.workflowStatus === "iptal") return false;
+      const row = rows.find((r) => r.id === d.workId);
+      if (row && (row.status === "tamamlandi" || row.status === "iptal")) return false;
+      if (d.support && d.support.resolved && !d.currentStepId && (d.completedSteps?.length ?? 0) === 0) return false;
+      return true;
+    });
     if (arr.length === 0) return null;
     arr.sort((a, b) => b.lastSavedAt - a.lastSavedAt);
     const top = arr[0];
@@ -56,13 +68,18 @@ function IslerimPage() {
   }, [drafts, rows]);
 
   const filtered = rows.filter((w) => {
-    if (q && !`${w.title} ${w.description ?? ""} ${w.code}`.toLowerCase().includes(q.toLowerCase())) return false;
+    if (q) {
+      const m = w.machine as any;
+      const hay = `${w.title} ${w.description ?? ""} ${w.code} ${m?.name ?? ""} ${m?.model ?? ""} ${m?.serial ?? ""} ${w.location_note ?? ""} ${m?.location ?? ""}`.toLowerCase();
+      if (!hay.includes(q.toLowerCase())) return false;
+    }
+    const d = drafts[w.id];
     switch (filter) {
       case "atanan": return w.source === "atanan";
-      case "bugun": return new Date(w.created_at).toDateString() === new Date().toDateString();
+      case "bugun": return d?.plannedAt ? isPlannedToday(d.plannedAt) : sameDay(new Date(w.created_at), new Date());
       case "devam": return w.status === "devam_ediyor";
-      case "destek": return !!drafts[w.id]?.support;
-      case "eksik": return w.status === "kapanis_eksik";
+      case "destek": return !!(d?.support && !d.support.resolved);
+      case "eksik": return w.status === "kapanis_eksik" || d?.workflowStatus === "kismi_tamamlandi";
       case "tamam": return w.status === "tamamlandi";
       default: return true;
     }
@@ -70,10 +87,14 @@ function IslerimPage() {
 
   const sections: { title: string; items: WorkRow[] }[] = filter === "tumu" ? [
     { title: "Bana atanan", items: filtered.filter((w) => w.source === "atanan" && w.status !== "tamamlandi") },
-    { title: "Bugün planlanan", items: filtered.filter((w) => new Date(w.created_at).toDateString() === new Date().toDateString() && w.source !== "atanan" && w.status !== "tamamlandi") },
-    { title: "Devam eden", items: filtered.filter((w) => w.status === "devam_ediyor" && !drafts[w.id]?.support && w.source !== "atanan") },
-    { title: "Destek / parça bekleyen", items: filtered.filter((w) => !!drafts[w.id]?.support) },
-    { title: "Kapanışı eksik", items: filtered.filter((w) => w.status === "kapanis_eksik") },
+    { title: "Bugün planlanan", items: filtered.filter((w) => {
+      const d = drafts[w.id];
+      const planned = d?.plannedAt ? isPlannedToday(d.plannedAt) : false;
+      return planned && w.source !== "atanan" && w.status !== "tamamlandi";
+    }) },
+    { title: "Devam eden", items: filtered.filter((w) => w.status === "devam_ediyor" && !(drafts[w.id]?.support && !drafts[w.id]!.support!.resolved) && w.source !== "atanan") },
+    { title: "Destek / parça bekleyen", items: filtered.filter((w) => !!(drafts[w.id]?.support && !drafts[w.id]!.support!.resolved)) },
+    { title: "Kapanışı eksik", items: filtered.filter((w) => w.status === "kapanis_eksik" || drafts[w.id]?.workflowStatus === "kismi_tamamlandi") },
   ] : [{ title: FILTERS.find((f) => f.key === filter)!.label, items: filtered }];
 
   return (
@@ -89,10 +110,10 @@ function IslerimPage() {
           <div className="card-soft p-4 mb-2">
             <div className="flex items-center gap-2 mb-1">
               <span className="pill pill-ink">{activeDraft.row.code}</span>
-              <span className="pill pill-primary">Devam ediyor</span>
+              <span className="pill pill-primary">{activeDraft.draft.support && !activeDraft.draft.support.resolved ? "Destek bekliyor" : "Devam ediyor"}</span>
             </div>
             <div className="font-semibold">{activeDraft.row.title}</div>
-            <div className="text-[12px] text-muted-foreground">{activeDraft.row.machine?.name ?? "—"} • {activeDraft.row.machine?.location ?? "—"}</div>
+            <div className="text-[12px] text-muted-foreground">{activeDraft.draft.machine?.name ?? activeDraft.row.machine?.name ?? "—"} • {activeDraft.draft.workLocation ?? activeDraft.row.machine?.location ?? "—"}</div>
           </div>
           <ContinueCard draft={activeDraft.draft} onContinue={() => navigate({ to: "/is/$id", params: { id: activeDraft.row.id } })} />
         </div>
@@ -120,7 +141,7 @@ function IslerimPage() {
           {sections.filter((s) => s.items.length > 0).map((s) => (
             <section key={s.title}>
               <div className="section-title mb-2">{s.title} <span className="text-muted-foreground">({s.items.length})</span></div>
-              <div className="space-y-3">{s.items.map((w) => <WorkCard key={w.id} w={w} />)}</div>
+              <div className="space-y-3">{s.items.map((w) => <WorkCard key={w.id} w={w} plannedAt={drafts[w.id]?.plannedAt ?? null} />)}</div>
             </section>
           ))}
           {sections.every((s) => s.items.length === 0) && <EmptyAssigned />}
