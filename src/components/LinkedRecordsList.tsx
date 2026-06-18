@@ -6,6 +6,7 @@ const RELATION_LABEL: Record<LinkedRecord["relation"], string> = {
   bagli_ariza: "Bağlantılı arıza",
   takip: "Takip işi",
   tekrar_test: "Tekrar test",
+  parca_talebi: "Parça talebi",
 };
 
 export function LinkedRecordsList({ workId }: { workId: string }) {
